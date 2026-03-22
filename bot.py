@@ -6,7 +6,6 @@ from storage import get_top_alerts
 # --- פקודות בסיסיות ---
 
 async def start(update, context):
-    chat_id = update.effective_chat.id
     user_name = update.effective_user.first_name
 
     welcome_text = (
@@ -19,11 +18,11 @@ async def start(update, context):
         "📋 `/list` - לראות את רשימת המעקב שלכם\n"
         "🧹 `/clear` - למחוק הכל ולחזור למצב ארצי\n"
         "👨‍👩‍👧 `/family ID` - להוסיף בן משפחה לעדכון\n"
-        "📊 `/status` - סיכום התרעות יומי\n"
+        "📊 `/top` - סיכום היישובים המותקפים ביותר\n"
         "🔔 `/test` - בדיקת צופר חכמה (מומלץ!)\n\n"
         "🛡 **יחד ננצח!**\n\n"
         "--- \n"
-        "👨‍💻 פותח על ידי ~ TrueNFalse ~"
+        "👨‍💻 פותח על ידי ~TrueNFalse ;)~"
     )
 
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
