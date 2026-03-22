@@ -312,13 +312,16 @@ async def alert_loop(app):
                     if chat_id in cooldown and now - cooldown[chat_id] < 30:
                         continue
 
+                    already_notified = set()
                     # שליחה חכמה למשתמש
                     await send_pro_alert(app, chat_id, alert)
+                    already_notified.add(chat_id)
 
                     # שליחה חכמה לבני משפחה
                     for member in get_family(chat_id):
-                        # שים לב: שיניתי ל-send_pro_alert כדי שגם המשפחה תקבל את העיצוב החדש
+                     if member not in already_notified:
                         await send_pro_alert(app, member, alert)
+                        already_notified.add(member)
 
                     mark_alert_sent(alert.alert_id, chat_id)
                     cooldown[chat_id] = now
