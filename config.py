@@ -1,0 +1,3 @@
+import os
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+POLL_INTERVAL_SECONDS = 3
