@@ -5,6 +5,8 @@ import threading
 from bot import build_app
 from alert_engine import AlertSource, format_alert
 from storage import *
+from config import BOT_TOKEN
+from telegram.ext import ApplicationBuilder
 from config import POLL_INTERVAL_SECONDS
 
 source = AlertSource()
@@ -68,14 +70,20 @@ async def alert_loop(app):
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 async def post_init(app):
+    # הפעלת הלופ בצורה תקינה לאחר שהאפליקציה עלתה
     app.create_task(alert_loop(app))
 
 def main():
     # 🌍 מפה חיה ברקע
-    threading.Thread(target=run_web).start()
+    threading.Thread(target=run_web, daemon=True).start()
 
-    app = build_app()
-    app.post_init = post_init
+    # יצירת האפליקציה עם post_init מובנה
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
+
+    # טעינת הפקודות מ-bot.py (חשוב לוודא ש-build_app לא יוצר אפליקציה חדשה אלא מוסיף להנדלרים)
+    # הערה: אם build_app שלך יוצר אפליקציה חדשה, עדיף לייבא רק את הפונקציה שמוסיפה הנדלרים
+    temp_app = build_app()
+    app.add_handlers(temp_app.handlers[0]) # הוספת ההנדלרים לאפליקציה המרכזית
 
     print("🚀 Bot + Map started")
     app.run_polling()
