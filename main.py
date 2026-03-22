@@ -79,3 +79,6 @@ def main():
 
     print("🚀 Bot + Map started")
     app.run_polling()
+
+if __name__ == "__main__":
+    main()
