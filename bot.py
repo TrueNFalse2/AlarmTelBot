@@ -167,6 +167,13 @@ async def handle_callback(update: Update, context):
 
     elif query.data == "help_phones":
         await query.message.reply_text("🚨 **מוקדי חירום:**\nמשטרה: 100\nמד\"א: 101\nכיבוי אש: 102\nפיקוד העורף: 104")
+        
+async def night_mode_cmd(update, context):
+    chat_id = update.effective_chat.id
+    current = get_pref(chat_id, "night_mode")
+    set_pref(chat_id, "night_mode", not current)
+    status = "מופעל 🌙" if not current else "כבוי ☀️"
+    await update.message.reply_text(f"מצב לילה חכם: {status}")
 
 async def silent_wave_cmd(update, context):
     chat_id = update.effective_chat.id
