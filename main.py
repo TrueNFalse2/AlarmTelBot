@@ -20,16 +20,29 @@ def match(user_areas, alert_areas):
 async def send_critical_alert(app, chat_id, text):
     # 🔊 סאונד חזק מאוד
     for _ in range(3):
-        await app.bot.send_message(chat_id, "🚨🚨🚨 התרעה!!!")
+        try:
+            await app.bot.send_message(chat_id, "🚨🚨🚨 התרעה!!!")
+        except Exception as e:
+            print(f"Error sending message to {chat_id}: {e}")
 
-    await app.bot.send_message(chat_id, text)
+    try:
+        await app.bot.send_message(chat_id, text)
+    except Exception as e:
+        print(f"Error sending text to {chat_id}: {e}")
 
     # 🔁 חוזר עד אישור
     for _ in range(2):
         await asyncio.sleep(5)
-        await app.bot.send_message(chat_id, "❗ עדיין יש איום! היכנס למרחב מוגן")
+        try:
+            await app.bot.send_message(chat_id, "❗ עדיין יש איום! היכנס למרחב מוגן")
+        except:
+            pass
 
 async def alert_loop(app):
+    # נותנים לבוט שנייה להתאפס לפני שהלופ מתחיל
+    await asyncio.sleep(2)
+    print("📢 Alert Loop Started")
+    
     while True:
         try:
             alerts = source.fetch_alerts()
@@ -39,7 +52,6 @@ async def alert_loop(app):
                 log_alert(alert)
 
                 for chat_id, areas in subs.items():
-
                     if not match(areas, alert.areas):
                         continue
 
@@ -67,18 +79,24 @@ async def alert_loop(app):
 
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
-async def post_init(app):
-    app.create_task(alert_loop(app))
+# פונקציית האתחול שמתבצעת ברגע שהבוט מתחבר בהצלחה
+async def on_post_init(application):
+    application.create_task(alert_loop(application))
 
 def main():
-    # 🌍 מפה חיה ברקע
-    threading.Thread(target=run_web).start()
+    # 🌍 מפה חיה ברקע (שרת ה-Web)
+    threading.Thread(target=run_web, daemon=True).start()
 
+    # בניית ה-Application
     app = build_app()
-    app.post_init = post_init
+    
+    # חיבור פונקציית ה-post_init בצורה נכונה
+    app.post_init = on_post_init
 
-    print("🚀 Bot + Map started")
-    app.run_polling()
+    print("🚀 Bot starting...")
+    
+    # הוספת drop_pending_updates=True פותרת את ה-Conflict
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
