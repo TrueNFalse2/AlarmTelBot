@@ -15,6 +15,7 @@ async def start(update, context):
         "📍 **רוצים לקבל התרעות רק על האזור שלכם?**\n"
         "פשוט רשמו: `/add שם העיר` (לדוגמה: `/add נתניה`)\n\n"
         "🛠 **פקודות נוספות:**\n"
+        "כדי לשלוח לו את הודעת הפתיחה \n"
         "📋 `/list` - לראות את רשימת המעקב שלכם\n"
         "🧹 `/clear` - למחוק הכל ולחזור למצב ארצי\n"
         "👨‍👩‍👧 `/family ID` - להוסיף בן משפחה לעדכון\n"
@@ -118,12 +119,49 @@ async def test(update, context):
 
 async def handle_callback(update: Update, context):
     query = update.callback_query
-    await query.answer()
+    await query.answer() # מפסיק את הטעינה על הכפתור
     
+    # טיפול בכפתור "אני מוגן - עדכן משפחה"
     if query.data.startswith("safe_"):
-        from main import handle_safe_callback
-        await handle_safe_callback(update, context)
+        chat_id = int(query.data.split("_")[1])
+        user_name = update.effective_user.first_name
+        
+        family_members = get_family(chat_id)
+        if not family_members:
+            return await query.message.reply_text("❌ לא הגדרת בני משפחה. השתמש בפקודה `/family ID`.")
+        
+        for member in family_members:
+            try:
+                await context.bot.send_message(
+                    chat_id=member,
+                    text=f"✅ **הודעת הרגעה מ-{user_name}:**\nאני במרחב מוגן והכל בסדר. אין צורך לדאוג!"
+                )
+            except:
+                pass
+        
+        # עדכון הטקסט של ההודעה המקורית להראות הצלחה
+        new_text = f"{query.message.text}\n\n✅ **דיווחת למשפחה שאתה מוגן!**"
+        # משתמשים ב-edit_message_text כי זו הודעת טקסט
+        await query.edit_message_text(text=new_text, parse_mode='Markdown', reply_markup=query.message.reply_markup)
 
+    # טיפול בכפתור "עזרה ראשונה" (help_me_fast) מההתראה
+    elif query.data == "help_me_fast":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🧘 נשימות להרגעה", callback_data="help_anxiety")],
+            [InlineKeyboardButton("🩹 טיפול בפציעה", callback_data="help_injury")],
+            [InlineKeyboardButton("📞 מוקדי חירום", callback_data="help_phones")]
+        ])
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🆘 **תפריט עזרה ראשונה מהיר:**\nבחר את הנושא הרלוונטי:",
+            reply_markup=keyboard
+        )
+
+    # טיפול בתת-כפתורים של עזרה (נשימות, טלפונים וכו')
+    elif query.data == "help_anxiety":
+        await query.message.reply_text("תרגיל נשימה 4-7-8:\nשאפו אוויר ל-4 שניות, החזיקו ל-7, ונשפו לאט ל-8 שניות. חזרו על כך 4 פעמים.")
+    elif query.data == "help_phones":
+        await query.message.reply_text("🚨 **מוקדי חירום:**\nמשטרה: 100\nמד\"א: 101\nכיבוי אש: 102\nפיקוד העורף: 104")
 async def night_mode_cmd(update, context):
     chat_id = update.effective_chat.id
     current = get_pref(chat_id, "night_mode")
