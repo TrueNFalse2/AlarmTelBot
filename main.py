@@ -1,22 +1,33 @@
 import asyncio
+import time
+from web_server import run_web
+import threading
 from bot import build_app
+from alert_engine import AlertSource, format_alert
+from storage import *
 from config import POLL_INTERVAL_SECONDS
-from storage import init_db, get_all_subscriptions, was_alert_sent, mark_alert_sent
-from alert_engine import MultiSourceAlert, format_alert
 
-source = MultiSourceAlert()
+source = AlertSource()
+cooldown = {}
 
+def match(user_areas, alert_areas):
+    return any(
+        ua.lower() in aa.lower()
+        for ua in user_areas
+        for aa in alert_areas
+    )
 
-def area_matches(user_areas: set[str], alert_areas: list[str]) -> bool:
-    user_areas_lower = [a.strip().lower() for a in user_areas]
-    alert_areas_lower = [a.strip().lower() for a in alert_areas]
+async def send_critical_alert(app, chat_id, text):
+    # 🔊 סאונד חזק מאוד
+    for _ in range(3):
+        await app.bot.send_message(chat_id, "🚨🚨🚨 התרעה!!!")
 
-    for ua in user_areas_lower:
-        for aa in alert_areas_lower:
-            if ua in aa or aa in ua:
-                return True
-    return False
+    await app.bot.send_message(chat_id, text)
 
+    # 🔁 חוזר עד אישור
+    for _ in range(2):
+        await asyncio.sleep(5)
+        await app.bot.send_message(chat_id, "❗ עדיין יש איום! היכנס למרחב מוגן")
 
 async def alert_loop(app):
     while True:
@@ -25,36 +36,46 @@ async def alert_loop(app):
             subs = get_all_subscriptions()
 
             for alert in alerts:
-                for chat_id, user_areas in subs.items():
-                    if not area_matches(user_areas, alert.areas):
+                log_alert(alert)
+
+                for chat_id, areas in subs.items():
+
+                    if not match(areas, alert.areas):
                         continue
 
                     if was_alert_sent(alert.alert_id, chat_id):
                         continue
 
-                    await app.bot.send_message(
-                        chat_id=chat_id,
-                        text=format_alert(alert)
-                    )
+                    # ⏱ cooldown
+                    now = time.time()
+                    if chat_id in cooldown and now - cooldown[chat_id] < 10:
+                        continue
+
+                    text = format_alert(alert)
+
+                    # 🔥 שליחה רגילה + משפחה
+                    await send_critical_alert(app, chat_id, text)
+
+                    for member in get_family(chat_id):
+                        await send_critical_alert(app, member, text)
+
                     mark_alert_sent(alert.alert_id, chat_id)
+                    cooldown[chat_id] = now
 
         except Exception as e:
             print("loop error:", e)
 
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
-
 async def post_init(app):
-    asyncio.create_task(alert_loop(app))
-
+    app.create_task(alert_loop(app))
 
 def main():
-    init_db()
+    # 🌍 מפה חיה ברקע
+    threading.Thread(target=run_web).start()
+
     app = build_app()
     app.post_init = post_init
-    print("Bot started 🚀")
+
+    print("🚀 Bot + Map started")
     app.run_polling()
-
-
-if __name__ == "__main__":
-    main()

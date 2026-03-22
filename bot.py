@@ -1,70 +1,39 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
+from telegram.ext import ApplicationBuilder, CommandHandler
 from config import BOT_TOKEN
-from storage import add_subscription, remove_subscription, list_subscriptions
+from storage import *
 
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update, context):
     await update.message.reply_text(
-        "ברוך הבא לבוט התרעות 🚨\n\n"
-        "פקודות:\n"
-        "/add <אזור>\n"
-        "/remove <אזור>\n"
-        "/list\n"
-        "/status\n"
-        "/test"
+        "🚨 PRO Alert System\n"
+        "/add עיר\n/remove עיר\n/list\n"
+        "/family ID\n/status\n/test"
     )
 
+async def add(update, context):
+    area = " ".join(context.args)
+    add_subscription(update.effective_chat.id, area)
+    await update.message.reply_text(f"נוסף: {area}")
 
-async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("דוגמה: /add ראשון לציון")
-        return
+async def remove(update, context):
+    area = " ".join(context.args)
+    remove_subscription(update.effective_chat.id, area)
+    await update.message.reply_text(f"הוסר: {area}")
 
-    area = " ".join(context.args).strip()
-    chat_id = update.effective_chat.id
-    add_subscription(chat_id, area)
-    await update.message.reply_text(f"נרשמת לאזור: {area}")
+async def list_cmd(update, context):
+    areas = list_subscriptions(update.effective_chat.id)
+    await update.message.reply_text("\n".join(areas) or "אין אזורים")
 
+async def family(update, context):
+    member = int(context.args[0])
+    add_family_member(update.effective_chat.id, member)
+    await update.message.reply_text("נוסף למשפחה")
 
-async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("דוגמה: /remove ראשון לציון")
-        return
+async def status(update, context):
+    from storage import get_stats
+    await update.message.reply_text(f"📊 סה״כ התרעות היום: {get_stats()}")
 
-    area = " ".join(context.args).strip()
-    chat_id = update.effective_chat.id
-    remove_subscription(chat_id, area)
-    await update.message.reply_text(f"הוסר אזור: {area}")
-
-
-async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    areas = list_subscriptions(chat_id)
-
-    if not areas:
-        await update.message.reply_text("אין לך אזורים רשומים.")
-        return
-
-    await update.message.reply_text("האזורי התרעה שלך:\n- " + "\n- ".join(areas))
-
-
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("הבוט פעיל ומאזין למקורות התרעה.")
-
-
-async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🚨 בדיקת מערכת\n"
-        "📍 אזורים: ראשון לציון\n"
-        "⏱ זמן הגעה משוער: 60 שניות\n"
-        "💥 זוהה רצף התרעות / מטח\n"
-        "⚠️ חיזוי: ייתכן המשך למרכז בתוך כ-45–90 שניות\n"
-        "🛰 מקור: test\n"
-        "📝 זו הודעת בדיקה"
-    )
-
+async def test(update, context):
+    await update.message.reply_text("🚨 התרעת בדיקה!")
 
 def build_app():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -73,6 +42,7 @@ def build_app():
     app.add_handler(CommandHandler("add", add))
     app.add_handler(CommandHandler("remove", remove))
     app.add_handler(CommandHandler("list", list_cmd))
+    app.add_handler(CommandHandler("family", family))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", test))
 
