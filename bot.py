@@ -10,7 +10,7 @@ async def start(update, context):
     user_name = update.effective_user.first_name
 
     welcome_text = (
-        f"👋 **שלום {user_name}! ברוכים הבאים למערכת PRO Alert**\n\n"
+        f"👋 **שלום {user_name}! ברוכים הבאים למערכת Red Alert**\n\n"
         "📢 **שימו לב:** כברירת מחדל, אתם מחוברים כרגע ל-**'מצב ארצי'**.\n"
         "זה אומר שתקבלו התרעות על כל אירוע בכל נקודה בארץ 🇮🇱\n\n"
         "📍 **רוצים לקבל התרעות רק על האזור שלכם?**\n"
@@ -19,8 +19,11 @@ async def start(update, context):
         "📋 `/list` - לראות את רשימת המעקב שלכם\n"
         "🧹 `/clear` - למחוק הכל ולחזור למצב ארצי\n"
         "👨‍👩‍👧 `/family ID` - להוסיף בן משפחה לעדכון\n"
+        "📊 `/status` - סיכום התרעות יומי\n"
         "🔔 `/test` - בדיקת צופר חכמה (מומלץ!)\n\n"
-        "🛡 **יחד ננצח!**"
+        "🛡 **יחד ננצח!**\n\n"
+        "--- \n"
+        "👨‍💻 פותח על ידי ~ TrueNFalse ~"
     )
 
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
