@@ -1,23 +1,29 @@
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from config import BOT_TOKEN
 from storage import *
-
+from storage import get_top_alerts
 # --- פקודות בסיסיות ---
 
 async def start(update, context):
-    await update.message.reply_text(
-        "🚨 **מערכת התרעות PRO באוויר**\n\n"
-        "פקודות זמינות:\n"
-        "➕ `/add עיר` - הוספת עיר למעקב\n"
-        "➖ `/remove עיר` - הסרת עיר\n"
-        "🧹 `/clear` - מחיקת כל רשימת המעקב\n"
-        "📍 `/locate` - הגדרת מיקום אוטומטי\n"
-        "📋 `/list` - הצגת רשימת המעקב שלי\n"
-        "👨‍👩‍👧 `/family ID` - הוספת בן משפחה לעדכון\n"
-        "📊 `/status` - סיכום יומי\n"
-        "🔔 `/test` - בדיקת צופר חכמה"
+    chat_id = update.effective_chat.id
+    user_name = update.effective_user.first_name
+
+    welcome_text = (
+        f"👋 **שלום {user_name}! ברוכים הבאים למערכת PRO Alert**\n\n"
+        "📢 **שימו לב:** כברירת מחדל, אתם מחוברים כרגע ל-**'מצב ארצי'**.\n"
+        "זה אומר שתקבלו התרעות על כל אירוע בכל נקודה בארץ 🇮🇱\n\n"
+        "📍 **רוצים לקבל התרעות רק על האזור שלכם?**\n"
+        "פשוט רשמו: `/add שם העיר` (לדוגמה: `/add נתניה`)\n\n"
+        "🛠 **פקודות נוספות:**\n"
+        "📋 `/list` - לראות את רשימת המעקב שלכם\n"
+        "🧹 `/clear` - למחוק הכל ולחזור למצב ארצי\n"
+        "👨‍👩‍👧 `/family ID` - להוסיף בן משפחה לעדכון\n"
+        "🔔 `/test` - בדיקת צופר חכמה (מומלץ!)\n\n"
+        "🛡 **יחד ננצח!**"
     )
+
+    await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def add(update, context):
     input_text = " ".join(context.args)
@@ -116,6 +122,45 @@ async def handle_callback(update: Update, context):
         from main import handle_safe_callback
         await handle_safe_callback(update, context)
 
+async def night_mode_cmd(update, context):
+    chat_id = update.effective_chat.id
+    current = get_pref(chat_id, "night_mode")
+    set_pref(chat_id, "night_mode", not current)
+    status = "מופעל 🌙 (התראות רגילות יושתקו, כטב\"ם/חדירה יצלצלו)" if not current else "כבוי ☀️"
+    await update.message.reply_text(f"מצב לילה חכם: {status}")
+
+async def silent_wave_cmd(update, context):
+    chat_id = update.effective_chat.id
+    current = get_pref(chat_id, "silent_wave")
+    set_pref(chat_id, "silent_wave", not current)
+    status = "מופעל 🔊 (תקבל הודעה קולית בכל אזעקה)" if not current else "כבוי 🤫"
+    await update.message.reply_text(f"גל שקט: {status}")
+
+async def help_me_cmd(update, context):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🧘 התקף חרדה - נשימות", callback_data="help_anxiety")],
+        [InlineKeyboardButton("🩸 עזרה ראשונה - פציעה", callback_data="help_injury")],
+        [InlineKeyboardButton("📞 טלפונים חיוניים", callback_data="help_phones")]
+    ])
+    await update.message.reply_text("🆘 **תפריט עזרה מהירה:**\nבחר את סוג העזרה הנדרשת:", reply_markup=keyboard, parse_mode='Markdown')
+
+async def top_alerts_cmd(update, context):
+
+    top_list = get_top_alerts()
+    
+    if not top_list:
+        return await update.message.reply_text("📊 עדיין אין מספיק נתונים לסיכום התרעות.")
+    
+    text = "📊 **סיכום התרעות - היישובים המותקפים ביותר:**\n\n"
+    
+    for i, (city, count) in enumerate(top_list, 1):
+        # הוספת אימוג'י לפי המיקום בדירוג
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "🔹"
+        text += f"{medal} **{city}**: {count} התרעות\n"
+    
+    text += "\n_הנתונים מבוססים על ההיסטוריה שנצברה במערכת_"
+    await update.message.reply_text(text, parse_mode='Markdown')
+
 # --- בניית האפליקציה ---
 
 def build_app():
@@ -131,9 +176,11 @@ def build_app():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", test))
     app.add_handler(CommandHandler("locate", locate_cmd))
-    
-    # מאזינים למיקום ולכפתורים
+    app.add_handler(CommandHandler("night", night_mode_cmd))
+    app.add_handler(CommandHandler("wave", silent_wave_cmd))
+    app.add_handler(CommandHandler("help_me", help_me_cmd))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
     app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(CommandHandler("top", top_alerts_cmd))
 
     return app

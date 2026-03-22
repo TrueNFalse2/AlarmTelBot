@@ -4,7 +4,17 @@ sent = set()        # {(alert_id, chat_id)}
 family_groups = {}  # {owner_id: set(members)}
 alert_history = []
 
+# תוסיף את המילונים האלו למעלה
+user_prefs = {} # {chat_id: {"night_mode": False, "silent_wave": False}}
 # --- ניהול אזורים ---
+
+def set_pref(chat_id, key, value):
+    if chat_id not in user_prefs:
+        user_prefs[chat_id] = {"night_mode": False, "silent_wave": False}
+    user_prefs[chat_id][key] = value
+
+def get_pref(chat_id, key):
+    return user_prefs.get(chat_id, {}).get(key, False)
 
 def add_subscription(chat_id, area):
     if chat_id not in subscriptions:
@@ -66,3 +76,16 @@ def log_alert(alert):
 def get_stats():
     # מחזיר את כמות ההתראות ב-24 השעות האחרונות (לפי ההיסטוריה)
     return len(alert_history)
+
+from collections import Counter
+
+def get_top_alerts(limit=7):
+    """מחזיר את היישובים עם הכי הרבה התרעות מההיסטוריה"""
+    all_cities = []
+    for alert in alert_history:
+        # alert.areas היא רשימה של יישובים
+        all_cities.extend(alert.areas)
+    
+    # ספירת מופעים של כל עיר
+    counts = Counter(all_cities).most_common(limit)
+    return counts

@@ -1,5 +1,6 @@
 import asyncio
 import time
+import datetime
 from web_server import run_web
 import threading
 from bot import build_app
@@ -108,13 +109,26 @@ ARRIVAL_TIMES = {
 }
 
 async def send_pro_alert(app, chat_id, alert):
-    # מציאת זמן הגעה מהמילון
+    # 1. מציאת זמן הגעה מהמילון
     city = alert.areas[0] if alert.areas else ""
     arrival_time = ARRIVAL_TIMES.get(city, "לפי הנחיות פיקוד העורף")
     
-    # קבלת הנחיות לפי הטקסט של ההתראה
+    # 2. קבלת הנחיות לפי הטקסט של ההתראה (כטב"ם, חדירה וכו')
     instructions = get_smart_instructions(alert.full_text if hasattr(alert, 'full_text') else str(alert.areas))
     
+    # 3. בדיקת "מצב לילה שקט" (בין 23:00 ל-06:00)
+    now_hour = datetime.datetime.now().hour
+    is_night_time = now_hour >= 23 or now_hour <= 6
+    
+    # הגדרת איומים קריטיים שמעירים עליהם בכל מקרה
+    is_critical_threat = any(x in instructions for x in ["כטב", "מחבלים", "חומס", "רעידת"])
+    
+    # לוגיקה להשתקת הודעה: רק אם המשתמש הגדיר לילה, עכשיו לילה וזה לא איום קריטי
+    should_mute = False
+    if get_pref(chat_id, "night_mode") and is_night_time and not is_critical_threat:
+        should_mute = True
+
+    # 4. עיצוב טקסט ההודעה
     text = (
         f"🚨 **התרעה קריטית!**\n\n"
         f"📍 **אזור:** {', '.join(alert.areas)}\n"
@@ -122,16 +136,31 @@ async def send_pro_alert(app, chat_id, alert):
         f"{instructions}"
     )
     
-   # יצירת כפתורים מתחת להודעה
+    # 5. יצירת כפתורים מתחת להודעה (כולל מפה ועזרה ראשונה)
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ אני במרחב מוגן - עדכן משפחה", callback_data=f"safe_{chat_id}")],
-        [InlineKeyboardButton("🔍 מקלטים קרובים", url="https://www.google.com/maps/search/מקלטים+ציבוריים")]
+        [InlineKeyboardButton("🗺️ מפת התראות חיה", url="https://tzevadom.com/he")],
+        [InlineKeyboardButton("🔍 מקלטים", url="https://www.google.com/maps/search/public+shelter"),
+         InlineKeyboardButton("🆘 עזרה ראשונה", callback_data="help_me_fast")]
     ])
 
     try:
-        await app.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode='Markdown')
-        # הפעלת טיימר סיום אירוע
+        # 6. שליחה עם תמיכה בהשתקה (disable_notification)
+        await app.bot.send_message(
+            chat_id=chat_id, 
+            text=text, 
+            reply_markup=keyboard, 
+            parse_mode='Markdown',
+            disable_notification=should_mute
+        )
+        
+        # בונוס: שליחת הודעה קולית אם "גל שקט" מופעל
+        if get_pref(chat_id, "silent_wave"):
+            await app.bot.send_message(chat_id, "🔊 **התראת קול (גל שקט) הופעלה!**")
+
+        # 7. הפעלת טיימר סיום אירוע (חזרה לשגרה)
         asyncio.create_task(end_event_notification(app, chat_id, ", ".join(alert.areas)))
+        
     except Exception as e:
         print(f"Error sending alert: {e}")
 
@@ -255,7 +284,7 @@ def get_smart_instructions(alert_text):
 
 async def alert_loop(app):
     await asyncio.sleep(2)
-    print("📢 Alert Loop Started (Smart Mode)")
+    print("📢 Alert Loop Started (Smart Mode + Auto-Alert)")
     
     while True:
         try:
@@ -266,13 +295,19 @@ async def alert_loop(app):
                 log_alert(alert)
 
                 for chat_id, areas in subs.items():
-                    if not match(areas, alert.areas):
+                    # --- שדרוג: מצב אוטומטי ---
+                    # אם המשתמש לא הגדיר ערים (רשימה ריקה), הוא מקבל הכל כברירת מחדל
+                    is_auto_mode = not areas or "כל הארץ" in [a.lower() for a in areas]
+                    
+                    # אם הוא לא במצב אוטומטי וגם אין התאמה לעיר שלו - דלג
+                    if not is_auto_mode and not match(areas, alert.areas):
                         continue
+                    # --------------------------
 
                     if was_alert_sent(alert.alert_id, chat_id):
                         continue
 
-                    # ⏱ cooldown מוגדל למניעת הצפה (30 שניות)
+                    # ⏱ cooldown למניעת הצפה
                     now = time.time()
                     if chat_id in cooldown and now - cooldown[chat_id] < 30:
                         continue
@@ -282,7 +317,8 @@ async def alert_loop(app):
 
                     # שליחה חכמה לבני משפחה
                     for member in get_family(chat_id):
-                        await send_smart_alert(app, member, alert)
+                        # שים לב: שיניתי ל-send_pro_alert כדי שגם המשפחה תקבל את העיצוב החדש
+                        await send_pro_alert(app, member, alert)
 
                     mark_alert_sent(alert.alert_id, chat_id)
                     cooldown[chat_id] = now
