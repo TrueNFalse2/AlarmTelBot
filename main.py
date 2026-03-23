@@ -16,7 +16,7 @@ from storage import *
 
 # --- הגדרות בינה מלאכותית (Gemini) ---
 # קבל מפתח חינמי ב-https://aistudio.google.com/
-genai.configure(api_key="AIzaSyDWV12DxCT5s9h6KLcPy0VYHE027b7Pr7c")
+os.getenv("GEMINI_API_KEY")
 model = genai.GenerativeModel('gemini-pro')
 
 # מקור ההתרעות
@@ -143,7 +143,7 @@ async def alert_loop(app):
     while True:
         # הקוד של הלופ שלך...
         await asyncio.sleep(1)
-        
+
 async def get_ai_response(query, lang="he"):
     """מענה חכם לשאלות משתמש באמצעות AI"""
     try:
