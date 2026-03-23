@@ -47,17 +47,16 @@ STRINGS = {
     }
 }
 
-
 async def get_weather_data(city_name):
-    """משיכת מזג אוויר לפי שם עיר באמצעות ה-API שלך"""
-    api_key = "224b96adb510d52ec9bcb722620b0852"
+    # במקום המפתח עצמו, אנחנו מושכים אותו מהסביבה
+    api_key = os.getenv("WEATHER_API_KEY") 
     api_url = f"https://api.openweathermap.org/data/2.5/weather?q={city_name}&appid={api_key}&units=metric&lang=he"
     
     try:
         response = requests.get(api_url).json()
         if response.get("cod") == 200:
             temp = response["main"]["temp"]
-            desc = response["weather"][0]["description"]
+            desc = response["weather"][0].get("description", "")
             return f"🌡️ {temp}°C, {desc}"
         return "🌤️ מזג אוויר לא זמין"
     except:
