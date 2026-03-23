@@ -1,91 +1,87 @@
-subscriptions = {}  # {chat_id: set(areas)}
-user_locations = {} # {chat_id: (lat, lon)} - חדש!
-sent = set()        # {(alert_id, chat_id)}
-family_groups = {}  # {owner_id: set(members)}
-alert_history = []
+import json
+import os
+import datetime
 
-# תוסיף את המילונים האלו למעלה
-user_prefs = {} # {chat_id: {"night_mode": False, "silent_wave": False}}
-# --- ניהול אזורים ---
+# בסיס נתונים פשוט בזיכרון (נשמר לקובץ)
+subscriptions = {}  # {chat_id: set(["כל הארץ"])}
+user_settings = {} # {chat_id: {"lang": "he", "night_mode": False, "lat": None, "lng": None}}
+alert_history = []  # רשימה שתשמור את היסטוריית האזעקות האחרונות
 
-def set_pref(chat_id, key, value):
-    if chat_id not in user_prefs:
-        user_prefs[chat_id] = {"night_mode": False, "silent_wave": False}
-    user_prefs[chat_id][key] = value
+def save_data():
+    data = {
+        "subs": {k: list(v) for k, v in subscriptions.items()},
+        "settings": user_settings
+    }
+    with open('data.json', 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-def get_pref(chat_id, key):
-    return user_prefs.get(chat_id, {}).get(key, False)
+def load_data():
+    global subscriptions, user_settings
+    if os.path.exists('data.json'):
+        with open('data.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            subscriptions = {int(k): set(v) for k, v in data.get("subs", {}).items()}
+            user_settings = {int(k): v for k, v in data.get("settings", {}).items()}
 
-def add_subscription(chat_id, area):
-    if chat_id not in subscriptions:
-        subscriptions[chat_id] = set()
-    subscriptions[chat_id].add(area)
+# הגדרת רדיוס ברירת מחדל ורדיוס שינה
+def get_user_radius(chat_id):
+    return get_user_setting(chat_id, "alert_radius", 15) # ברירת מחדל 15 ק"מ
 
-def remove_subscription(chat_id, area):
-    if chat_id in subscriptions:
-        subscriptions[chat_id].discard(area)
+def set_sleep_radius(chat_id, is_sleep_mode):
+    radius = 5 if is_sleep_mode else 15
+    set_user_setting(chat_id, "alert_radius", radius)
 
-def clear_all_subscriptions(chat_id):
-    """מנקה את כל רשימת המעקב של המשתמש"""
-    if chat_id in subscriptions:
-        subscriptions[chat_id] = set()
-    # אם תרצה למחוק גם את המיקום השמור שלו בזמן הניקוי:
-    if chat_id in user_locations:
-        del user_locations[chat_id]
 
-def list_subscriptions(chat_id):
-    # מחזיר רשימה ממוינת ללא כפילויות
-    return sorted(list(subscriptions.get(chat_id, [])))
+def toggle_user_mode(chat_id, mode_name):
+    """משנה את המצב (True/False) ושומר"""
+    current = get_user_setting(chat_id, mode_name, False)
+    set_user_setting(chat_id, mode_name, not current)
+    return not current
 
-def get_all_subscriptions():
-    return subscriptions
+def set_user_setting(chat_id, key, value):
+    if chat_id not in user_settings:
+        user_settings[chat_id] = {"lang": "he", "night_mode": False, "lat": None, "lng": None}
+    user_settings[chat_id][key] = value
+    save_data()
 
-# --- ניהול מיקום GPS (חדש!) ---
+# שמירת זמן האזעקה האחרונה לכל צ'אט
+last_alert_times = {} # {chat_id: datetime}
 
-def save_user_gps(chat_id, lat, lon):
-    """שומר קואורדינטות של משתמש"""
-    user_locations[chat_id] = (lat, lon)
+def update_last_alert_time(chat_id):
+    last_alert_times[chat_id] = datetime.datetime.now()
+    save_data()
 
-def get_user_location(chat_id):
-    """שולף מיקום שמור של משתמש"""
-    return user_locations.get(chat_id)
+def get_quiet_duration(chat_id):
+    last_time = last_alert_times.get(chat_id)
+    if not last_time:
+        return "לא נרשמו אזעקות לאחרונה"
+    
+    diff = datetime.datetime.now() - last_time
+    hours, remainder = divmod(int(diff.total_seconds()), 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{hours} שעות ו-{minutes} דקות של שקט בגזרתך"
 
-# --- מניעת כפילויות בהודעות ---
+def get_user_setting(chat_id, key, default):
+    return user_settings.get(chat_id, {}).get(key, default)
+
+def get_all_users():
+    return list(subscriptions.keys())
+
+def get_city_coords(city_name):
+    try:
+        if os.path.exists('cities.json'):
+            with open('cities.json', 'r', encoding='utf-8') as f:
+                cities = json.load(f)
+                for city in cities:
+                    if city['name'].strip() == city_name.strip():
+                        return city['lat'], city['lng']
+    except: pass
+    return None, None
 
 def was_alert_sent(alert_id, chat_id):
-    return (alert_id, chat_id) in sent
+    return False # לצורך הבדיקה, בייצור כדאי לנהל לוג שליחות
 
 def mark_alert_sent(alert_id, chat_id):
-    sent.add((alert_id, chat_id))
+    pass
 
-# --- 👨‍👩‍👧 קבוצות משפחה ---
-
-def add_family_member(owner, member):
-    if owner not in family_groups:
-        family_groups[owner] = set()
-    family_groups[owner].add(member)
-
-def get_family(owner):
-    return family_groups.get(owner, set())
-
-# --- 📊 סטטיסטיקה ---
-
-def log_alert(alert):
-    alert_history.append(alert)
-
-def get_stats():
-    # מחזיר את כמות ההתראות ב-24 השעות האחרונות (לפי ההיסטוריה)
-    return len(alert_history)
-
-from collections import Counter
-
-def get_top_alerts(limit=7):
-    """מחזיר את היישובים עם הכי הרבה התרעות מההיסטוריה"""
-    all_cities = []
-    for alert in alert_history:
-        # alert.areas היא רשימה של יישובים
-        all_cities.extend(alert.areas)
-    
-    # ספירת מופעים של כל עיר
-    counts = Counter(all_cities).most_common(limit)
-    return counts
+load_data()
