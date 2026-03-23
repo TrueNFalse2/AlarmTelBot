@@ -1,5 +1,5 @@
-python-telegram-bot>=21.6
+python-telegram-bot
 requests
-flask
+feedparser
 gTTS
 google-generativeai
